@@ -12,6 +12,7 @@ export default defineConfig({
         return 'widget.bundle.js';
       },
       formats: ['es', 'cjs', 'umd'],
+      cssFileName: 'style',
     },
     rollupOptions: {
       output: {

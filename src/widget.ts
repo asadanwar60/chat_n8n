@@ -63,6 +63,14 @@ export class ChatWidget {
   }
 
   private initDOM(): void {
+    if (typeof document === 'undefined') return;
+
+    // Remove any existing widget root to prevent duplicate bubbles
+    const existing = document.querySelector('.n8n-chat-root');
+    if (existing) {
+      existing.remove();
+    }
+
     document.documentElement.style.setProperty('--n8n-primary-color', this.config.primaryColor);
 
     this.container = document.createElement('div');
@@ -286,6 +294,12 @@ export class ChatWidget {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  public destroy(): void {
+    if (this.container && this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    }
   }
 }
 

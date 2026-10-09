@@ -1,0 +1,37 @@
+{
+  "name": "chat_n8n",
+  "version": "0.1.0",
+  "description": "Lightweight, customizable embeddable AI chat widget for customer support and n8n backend",
+  "main": "./dist/widget.cjs.js",
+  "module": "./dist/widget.es.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/widget.es.js",
+      "require": "./dist/widget.cjs.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc --emitDeclarationOnly",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "chat",
+    "widget",
+    "n8n",
+    "ai",
+    "customer-support"
+  ],
+  "author": "Asad Anwar",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}

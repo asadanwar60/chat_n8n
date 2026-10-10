@@ -7,7 +7,13 @@ const DEFAULT_INITIAL_MESSAGES = [
 ];
 
 export class ChatWidget {
-  private config: Required<ChatConfig>;
+  private config: Required<
+    Omit<ChatConfig, 'metadata' | 'authTokenStorageKey' | 'deviceIdStorageKey' | 'onMessageReceived'>
+  >;
+  private metadataSource?: Record<string, any> | (() => Record<string, any>);
+  private authTokenStorageKey: string;
+  private deviceIdStorageKey: string;
+  private onMessageReceived?: (message: ChatMessage, rawResponse: any) => void;
   private container!: HTMLElement;
   private bubbleBtn!: HTMLButtonElement;
   private windowEl!: HTMLElement;
@@ -26,6 +32,10 @@ export class ChatWidget {
 
     const botId = options.botId || 'default_bot';
     this.storageKey = `n8n_chat_history_${botId}`;
+    this.metadataSource = options.metadata;
+    this.authTokenStorageKey = options.authTokenStorageKey || 'velour_auth_token';
+    this.deviceIdStorageKey = options.deviceIdStorageKey || 'velour_device_id';
+    this.onMessageReceived = options.onMessageReceived;
 
     const sessionId =
       options.sessionId ||
@@ -49,6 +59,96 @@ export class ChatWidget {
 
     this.initDOM();
     this.loadHistory();
+  }
+
+  public setMetadata(metadata: Record<string, any> | (() => Record<string, any>)): void {
+    this.metadataSource = metadata;
+  }
+
+  private decodeJwtRole(token: string): string | undefined {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return undefined;
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+      const payload = JSON.parse(atob(padded));
+      if (payload?.exp && typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) {
+        return undefined;
+      }
+      if (typeof payload?.role === 'string' && payload.role.trim()) {
+        return payload.role.trim().toLowerCase();
+      }
+      return 'customer';
+    } catch {
+      return undefined;
+    }
+  }
+
+  private resolveMetadata(): Record<string, any> {
+    let customMeta: Record<string, any> = {};
+    try {
+      if (typeof this.metadataSource === 'function') {
+        customMeta = { ...(this.metadataSource() || {}) };
+      } else if (this.metadataSource && typeof this.metadataSource === 'object') {
+        customMeta = { ...this.metadataSource };
+      }
+    } catch {
+      customMeta = {};
+    }
+
+    let token: string | undefined = customMeta.token;
+    let deviceId: string | undefined = customMeta.deviceId;
+    let role: string | undefined = customMeta.role;
+
+    if (typeof window !== 'undefined') {
+      try {
+        if (!token) {
+          token =
+            localStorage.getItem(this.authTokenStorageKey) ||
+            localStorage.getItem('velour_auth_token') ||
+            undefined;
+        }
+        if (!deviceId) {
+          deviceId =
+            localStorage.getItem(this.deviceIdStorageKey) ||
+            localStorage.getItem('velour_device_id') ||
+            undefined;
+        }
+        if (!role && token) {
+          role = this.decodeJwtRole(token);
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    }
+
+    const normalizedRole = role
+      ? ['admin', 'superadmin'].includes(String(role).toLowerCase())
+        ? 'admin'
+        : ['customer', 'user'].includes(String(role).toLowerCase())
+          ? 'customer'
+          : 'public'
+      : token
+        ? 'customer'
+        : 'public';
+
+    const resolved: Record<string, any> = {
+      ...customMeta,
+      bot_id: this.config.botId,
+      role: normalizedRole,
+    };
+
+    if (token) {
+      resolved.token = token;
+    } else {
+      delete resolved.token;
+    }
+
+    if (deviceId) {
+      resolved.deviceId = deviceId;
+    }
+
+    return resolved;
   }
 
   private generateUUID(): string {
@@ -231,6 +331,7 @@ export class ChatWidget {
     this.showTypingIndicator();
 
     try {
+      const metadata = this.resolveMetadata();
       const response = await fetch(this.config.apiUrl, {
         method: 'POST',
         headers: {
@@ -242,6 +343,7 @@ export class ChatWidget {
           message: text,
           sessionId: this.config.sessionId,
           bot_id: this.config.botId,
+          metadata,
         }),
       });
 
@@ -263,6 +365,11 @@ export class ChatWidget {
       this.messages.push(botMsg);
       this.appendMessageElement(botMsg);
       this.saveHistory();
+      try {
+        this.onMessageReceived?.(botMsg, data);
+      } catch {
+        // Ignore callback errors
+      }
     } catch (err: any) {
       const errorMsg: ChatMessage = {
         id: this.generateUUID(),

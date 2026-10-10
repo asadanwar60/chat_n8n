@@ -19,6 +19,14 @@ export interface ChatConfig {
   position?: 'bottom-right' | 'bottom-left';
   /** Footer branding text */
   footerText?: string;
+  /** Optional static or dynamic metadata object (e.g. token, role, deviceId) sent with every message */
+  metadata?: Record<string, any> | (() => Record<string, any>);
+  /** Optional localStorage key to read the user's JWT auth token from (defaults to 'velour_auth_token') */
+  authTokenStorageKey?: string;
+  /** Optional localStorage key to read the user's device ID from (defaults to 'velour_device_id') */
+  deviceIdStorageKey?: string;
+  /** Optional callback invoked after each bot response is received */
+  onMessageReceived?: (message: ChatMessage, rawResponse: any) => void;
 }
 
 export interface ChatMessage {
